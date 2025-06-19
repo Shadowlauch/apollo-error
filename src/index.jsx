@@ -1,83 +1,59 @@
 /*** APP ***/
-import React, { useState } from "react";
+import React, {useEffect, useState} from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { createRoot } from "react-dom/client";
 import {
-  ApolloClient,
   ApolloProvider,
-  InMemoryCache,
   gql,
   useQuery,
-  useMutation,
 } from "@apollo/client";
 
-import { link } from "./link.js";
-import { Subscriptions } from "./subscriptions.jsx";
 import { Layout } from "./layout.jsx";
 import "./index.css";
+import {Mutations} from "./mutations.jsx";
+import client from "./client.js";
 
 const ALL_PEOPLE = gql`
-  query AllPeople {
-    people {
+  query AllPeople($test: String!) {
+    people(test: $test) {
       id
       name
     }
   }
-`;
-
-const ADD_PERSON = gql`
-  mutation AddPerson($name: String) {
-    addPerson(name: $name) {
-      id
-      name
-    }
-  }
-`;
+`
 
 function App() {
-  const [name, setName] = useState("");
-  const { loading, data } = useQuery(ALL_PEOPLE);
+  const [test, setTest] = useState('test')
+  const [isDone, setIsDone] = useState(false)
 
-  const [addPerson] = useMutation(ADD_PERSON, {
-    update: (cache, { data: { addPerson: addPersonData } }) => {
-      const peopleResult = cache.readQuery({ query: ALL_PEOPLE });
+  useEffect(() => {
+    if (!isDone) {
+      setTest('')
+      setIsDone(true);
+    } else {
+      setTest('test');
+    }
+  }, [isDone]);
 
-      cache.writeQuery({
-        query: ALL_PEOPLE,
-        data: {
-          ...peopleResult,
-          people: [...peopleResult.people, addPersonData],
-        },
-      });
-    },
+  const { loading, data, previousData } = useQuery(ALL_PEOPLE, {
+    fetchPolicy: 'cache-and-network',
+    variables: {test},
+    skip: !test, // Skip the query if test is empty
   });
+
+  const records = data?.people ?? previousData?.people ?? [];
+  console.log("data", !test, records);
 
   return (
     <main>
       <h3>Home</h3>
-      <div className="add-person">
-        <label htmlFor="name">Name</label>
-        <input
-          type="text"
-          name="name"
-          value={name}
-          onChange={(evt) => setName(evt.target.value)}
-        />
-        <button
-          onClick={() => {
-            addPerson({ variables: { name } });
-            setName("");
-          }}
-        >
-          Add person
-        </button>
-      </div>
+      <Mutations />
       <h2>Names</h2>
       {loading ? (
         <p>Loading…</p>
       ) : (
         <ul>
-          {data?.people.map((person) => (
+          {records.map((person) => (
             <li key={person.id}>{person.name}</li>
           ))}
         </ul>
@@ -86,10 +62,6 @@ function App() {
   );
 }
 
-const client = new ApolloClient({
-  cache: new InMemoryCache(),
-  link,
-});
 
 const container = document.getElementById("root");
 const root = createRoot(container);
@@ -100,7 +72,6 @@ root.render(
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<App />} />
-          <Route path="subscriptions-wslink" element={<Subscriptions />} />
         </Route>
       </Routes>
     </Router>
